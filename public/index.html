@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enhanced Chat App</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+
+<body>
+  <!-- Username Modal -->
+  <div id="usernameModal">
+    <div>
+      <h3>Welcome to Chat!</h3>
+      <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="20" />
+      <button id="submitUsername">Join Chat</button>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    <!-- Header -->
+    <div class="header">
+      <h1>💬 Chat Room</h1>
+      <p>Connect, chat, and share with friends in real-time</p>
+    </div>
+
+    <!-- Room Controls -->
+    <div class="room-controls">
+      <label>Room:</label>
+      <input id="roomInput" class="room-input" placeholder="Enter room name" maxlength="20" />
+      <input id="roomPassword" class="room-input" type="password" placeholder="Password (optional)" />
+      <div class="checkbox-wrapper">
+        <input type="checkbox" id="isPrivate" />
+        <label for="isPrivate">Private Room</label>
+      </div>
+      <button id="joinRoomBtn" class="btn">Join Room</button>
+    <button id="joinGeminiBtn" class="btn" style="background: #6a1b9a;">Join Gemini Room 🤖</button>
+
+    </div>
+
+    <!-- Error Message -->
+    <div id="errorMessage" class="error-message"></div>
+
+    <!-- Chat Layout -->
+    <div class="chat-layout">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-section">
+          <h3>👥 Online Users (<span id="userCount">0</span>)</h3>
+          <ul id="users" class="user-list"></ul>
+        </div>
+        <div class="sidebar-section">
+          <h3>🏠 Available Rooms</h3>
+          <ul id="roomList" class="room-list"></ul>
+        </div>
+      </div>
+
+      <!-- Chat Area -->
+      <div class="chat-area">
+        <div class="messages-container">
+          <ul id="messages" class="messages-list"></ul>
+        </div>
+        <form id="form" class="message-form">
+  <input id="input" class="message-input" autocomplete="off" placeholder="Type your message..." maxlength="500" />
+  <button type="submit" id="sendBtn" class="send-btn">Send 📤</button>
+  <button type="button" id="askGeminiBtn" class="send-btn" style="background: #7b1fa2;">Ask Gemini 🤖</button>
+</form>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    let username = '';
+    let currentRoom = 'lobby';
+
+    const usernameModal = document.getElementById('usernameModal');
+    const usernameInput = document.getElementById('usernameInput');
+    const submitUsernameBtn = document.getElementById('submitUsername');
+    const roomInput = document.getElementById('roomInput');
+    const roomPassword = document.getElementById('roomPassword');
+    const isPrivateCheckbox = document.getElementById('isPrivate');
+    const joinRoomBtn = document.getElementById('joinRoomBtn');
+    const joinGeminiBtn = document.getElementById('joinGeminiBtn');
+    const roomList = document.getElementById('roomList');
+    const usersList = document.getElementById('users');
+    const userCount = document.getElementById('userCount');
+    const messages = document.getElementById('messages');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+    const errorMessage = document.getElementById('errorMessage');
+
+    // Show error message with animation
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorMessage.classList.add('show');
+      setTimeout(() => {
+        errorMessage.classList.remove('show');
+      }, 5000);
+    }
+
+    // Prompt for username and set it
+    submitUsernameBtn.onclick = () => {
+      const name = usernameInput.value.trim() || 'Anonymous';
+      username = name;
+      socket.emit('set username', name);
+      usernameModal.style.display = 'none';
+      roomInput.value = 'lobby';
+      currentRoom = 'lobby';
+      roomInput.focus();
+    };
+
+    // Allow Enter key in username input
+    usernameInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        submitUsernameBtn.click();
+      }
+    });
+
+    // Update room list UI
+    socket.on('room list', (rooms) => {
+      roomList.innerHTML = '';
+      rooms.forEach(room => {
+        const li = document.createElement('li');
+        li.textContent = room;
+        if (room === currentRoom) li.classList.add('active');
+        li.onclick = () => {
+          if (room === currentRoom) return;
+          // Check if room is private
+          socket.emit('check room privacy', room, (isPrivate) => {
+            if (isPrivate) {
+              const pw = prompt('Enter password for private room:');
+              if (pw === null) return; // cancel
+              joinRoom(room, pw, true);
+            } else {
+              joinRoom(room, '', false);
+            }
+          });
+        };
+        roomList.appendChild(li);
+      });
+    });
+
+    // Update user list UI
+    socket.on('user list', (users) => {
+      usersList.innerHTML = '';
+      userCount.textContent = users.length;
+      users.forEach(u => {
+        const li = document.createElement('li');
+        li.textContent = u;
+        li.onclick = () => {
+          if (u === username) return showError("You can't private message yourself!");
+          const privateMsg = prompt(`Send private message to ${u}:`);
+          if (privateMsg && privateMsg.trim()) {
+            socket.emit('private message', { toUser: u, text: privateMsg.trim() });
+            addMessage({ user: `To ${u} (private)`, text: privateMsg.trim(), time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) }, true);
+          }
+        };
+        usersList.appendChild(li);
+      });
+    });
+
+    // Receive public chat messages
+    socket.on('chat message', (msg) => {
+      addMessage(msg, false);
+    });
+
+    // Receive private messages
+    socket.on('private message', (msg) => {
+      addMessage({ user: `${msg.from} (private)`, text: msg.text, time: msg.time }, true);
+    });
+
+    // Join error handling
+    socket.on('join error', (msg) => {
+      showError(msg);
+    });
+
+    // Join room function
+    function joinRoom(roomName, password, isPrivate) {
+  errorMessage.classList.remove('show');
+  socket.emit('join room', { roomName, password, isPrivate });
+  currentRoom = roomName;
+  roomInput.value = roomName;
+  roomPassword.value = '';
+  isPrivateCheckbox.checked = isPrivate;
+  messages.innerHTML = '';
+
+  // ✅ Toggle buttons based on room
+  const sendBtn = document.getElementById('sendBtn');
+  const askGeminiBtn = document.getElementById('askGeminiBtn');
+
+  if (roomName === 'gemini-room') {
+    sendBtn.style.display = 'none';
+    askGeminiBtn.style.display = 'inline-block';
+  } else {
+    sendBtn.style.display = 'inline-block';
+    askGeminiBtn.style.display = 'none';
+  }
+}
+
+
+    // Join room button clicked
+    joinRoomBtn.onclick = () => {
+      const roomName = roomInput.value.trim();
+      if (!roomName) {
+        showError('Please enter a room name.');
+        return;
+      }
+      if (roomName === currentRoom) return; // Already in room
+
+      const pw = roomPassword.value;
+      const isPrivate = isPrivateCheckbox.checked;
+
+      if (isPrivate && !pw) {
+        showError('Please enter a password for private room.');
+        return;
+      }
+
+      joinRoom(roomName, pw, isPrivate);
+    };
+joinGeminiBtn.onclick = () => {
+  joinRoom('gemini-room', '', false);
+};
+
+    // Send chat message
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!input.value.trim()) return;
+      socket.emit('chat message', { user: username, text: input.value.trim() });
+      input.value = '';
+    });
+
+    // Add message to messages list with new styling
+    function addMessage(msg, isPrivate) {
+      const li = document.createElement('li');
+      li.className = isPrivate ? 'message private' : 'message';
+      
+      const header = document.createElement('div');
+      header.className = 'message-header';
+      header.textContent = `${msg.user} • ${msg.time}`;
+      
+      const text = document.createElement('div');
+      text.className = 'message-text';
+      text.textContent = msg.text;
+      
+      li.appendChild(header);
+      li.appendChild(text);
+      messages.appendChild(li);
+      
+      // Auto-scroll to bottom
+      messages.parentElement.scrollTop = messages.parentElement.scrollHeight;
+    }
+
+    // Focus username input on load
+    window.addEventListener('load', () => {
+      usernameInput.focus();
+      // Hide Gemini button by default on page load
+askGeminiBtn.style.display = 'none';
+
+    });
+    const askGeminiBtn = document.getElementById('askGeminiBtn');
+
+askGeminiBtn.onclick = async () => {
+  const userMsg = input.value.trim();
+  if (!userMsg) return;
+
+  // Add user message locally
+  addMessage({
+    user: username,
+    text: userMsg,
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }, false);
+
+  input.value = '';
+
+  // Fetch Gemini's response
+  try {
+    const res = await fetch('/chatbot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: userMsg })
+    });
+
+    const data = await res.json();
+    const botReply = data.reply || '🤖 Gemini could not respond.';
+
+    addMessage({
+      user: 'Gemini Bot',
+      text: botReply,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }, false);
+  } catch (err) {
+    addMessage({
+      user: 'Gemini Bot',
+      text: '⚠️ Failed to contact Gemini API.',
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }, false);
+  }
+};
+
+  </script>
+</body>
+</html>
