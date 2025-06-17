@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="style.css">
 </head>
 
-
 <body>
   <!-- Username Modal -->
   <div id="usernameModal">
@@ -30,15 +29,31 @@
     <div class="room-controls">
       <label>Room:</label>
       <input id="roomInput" class="room-input" placeholder="Enter room name" maxlength="20" />
-      <input id="roomPassword" class="room-input" type="password" placeholder="Password (optional)" />
-      <div class="checkbox-wrapper">
-        <input type="checkbox" id="isPrivate" />
-        <label for="isPrivate">Private Room</label>
+      <input id="roomPassword" class="room-input" type="password" placeholder="Password (optional - makes room private)" />
+     <button id="joinRoomBtn" class="btn">Join Room</button>
+      <button id="joinGeminiBtn" class="btn" style="background: #6a1b9a;">Join Gemini Room 🤖</button>
+      <!-- ✅ STEP 5: Language selector in sidebar -->
+      <div class="language-selector">
+        <label for="languageSelect">🌐 My Language:</label>
+        <select id="languageSelect">
+          <option value="en">English</option>
+          <option value="hi">हिंदी (Hindi)</option>
+          <option value="es">Español (Spanish)</option>
+          <option value="fr">Français (French)</option>
+          <option value="de">Deutsch (German)</option>
+          <option value="ja">日本語 (Japanese)</option>
+          <option value="ko">한국어 (Korean)</option>
+          <option value="zh">中文 (Chinese)</option>
+          <option value="ar">العربية (Arabic)</option>
+          <option value="ru">Русский (Russian)</option>
+        </select>
       </div>
-      <button id="joinRoomBtn" class="btn">Join Room</button>
-    <button id="joinGeminiBtn" class="btn" style="background: #6a1b9a;">Join Gemini Room 🤖</button>
 
+      
     </div>
+ 
+    
+
 
     <!-- Error Message -->
     <div id="errorMessage" class="error-message"></div>
@@ -56,18 +71,18 @@
           <ul id="roomList" class="room-list"></ul>
         </div>
       </div>
-
+      
       <!-- Chat Area -->
       <div class="chat-area">
         <div class="messages-container">
           <ul id="messages" class="messages-list"></ul>
         </div>
         <form id="form" class="message-form">
-  <input id="input" class="message-input" autocomplete="off" placeholder="Type your message..." maxlength="500" />
-  <button type="submit" id="sendBtn" class="send-btn">Send 📤</button>
-  <button type="button" id="askGeminiBtn" class="send-btn" style="background: #7b1fa2;">Ask Gemini 🤖</button>
-</form>
-
+          <input id="input" class="message-input" autocomplete="off" placeholder="Type your message..." maxlength="500" />
+          <button type="submit" id="sendBtn" class="send-btn">Send 📤</button>
+          <button type="button" id="askGeminiBtn" class="send-btn" style="background: #7b1fa2;">Ask Gemini 🤖</button>
+          <button type="button" id="translateInputBtn" class="send-btn" style="background: #4caf50;">Translate🔄</button>
+        </form>
       </div>
     </div>
   </div>
@@ -78,13 +93,13 @@
 
     let username = '';
     let currentRoom = 'lobby';
+    let userLanguage = 'en'; // Track user's preferred language
 
     const usernameModal = document.getElementById('usernameModal');
     const usernameInput = document.getElementById('usernameInput');
     const submitUsernameBtn = document.getElementById('submitUsername');
     const roomInput = document.getElementById('roomInput');
     const roomPassword = document.getElementById('roomPassword');
-    const isPrivateCheckbox = document.getElementById('isPrivate');
     const joinRoomBtn = document.getElementById('joinRoomBtn');
     const joinGeminiBtn = document.getElementById('joinGeminiBtn');
     const roomList = document.getElementById('roomList');
@@ -94,6 +109,13 @@
     const form = document.getElementById('form');
     const input = document.getElementById('input');
     const errorMessage = document.getElementById('errorMessage');
+    const languageSelect = document.getElementById('languageSelect');
+
+    // ✅ STEP 6: Language change handler
+    languageSelect.addEventListener('change', (e) => {
+      userLanguage = e.target.value;
+      console.log(`Language changed to: ${userLanguage}`);
+    });
 
     // Show error message with animation
     function showError(msg) {
@@ -131,14 +153,13 @@
         if (room === currentRoom) li.classList.add('active');
         li.onclick = () => {
           if (room === currentRoom) return;
-          // Check if room is private
           socket.emit('check room privacy', room, (isPrivate) => {
             if (isPrivate) {
               const pw = prompt('Enter password for private room:');
-              if (pw === null) return; // cancel
-              joinRoom(room, pw, true);
+              if (pw === null) return;
+              joinRoom(room, pw);
             } else {
-              joinRoom(room, '', false);
+              joinRoom(room, '');
             }
           });
         };
@@ -181,28 +202,26 @@
     });
 
     // Join room function
-    function joinRoom(roomName, password, isPrivate) {
-  errorMessage.classList.remove('show');
-  socket.emit('join room', { roomName, password, isPrivate });
-  currentRoom = roomName;
-  roomInput.value = roomName;
-  roomPassword.value = '';
-  isPrivateCheckbox.checked = isPrivate;
-  messages.innerHTML = '';
+    function joinRoom(roomName, password) {
+      errorMessage.classList.remove('show');
+      socket.emit('join room', { roomName, password });
+      currentRoom = roomName;
+      roomInput.value = roomName;
+      roomPassword.value = '';
+      messages.innerHTML = '';
 
-  // ✅ Toggle buttons based on room
-  const sendBtn = document.getElementById('sendBtn');
-  const askGeminiBtn = document.getElementById('askGeminiBtn');
+      // Toggle buttons based on room
+      const sendBtn = document.getElementById('sendBtn');
+      const askGeminiBtn = document.getElementById('askGeminiBtn');
 
-  if (roomName === 'gemini-room') {
-    sendBtn.style.display = 'none';
-    askGeminiBtn.style.display = 'inline-block';
-  } else {
-    sendBtn.style.display = 'inline-block';
-    askGeminiBtn.style.display = 'none';
-  }
-}
-
+      if (roomName === 'gemini-room') {
+        sendBtn.style.display = 'none';
+        askGeminiBtn.style.display = 'inline-block';
+      } else {
+        sendBtn.style.display = 'inline-block';
+        askGeminiBtn.style.display = 'none';
+      }
+    }
 
     // Join room button clicked
     joinRoomBtn.onclick = () => {
@@ -211,31 +230,64 @@
         showError('Please enter a room name.');
         return;
       }
-      if (roomName === currentRoom) return; // Already in room
+      if (roomName === currentRoom) return;
 
-      const pw = roomPassword.value;
-      const isPrivate = isPrivateCheckbox.checked;
-
-      if (isPrivate && !pw) {
-        showError('Please enter a password for private room.');
-        return;
-      }
-
-      joinRoom(roomName, pw, isPrivate);
+      const pw = roomPassword.value.trim();
+      joinRoom(roomName, pw);
     };
-joinGeminiBtn.onclick = () => {
-  joinRoom('gemini-room', '', false);
-};
 
-    // Send chat message
+    joinGeminiBtn.onclick = () => {
+      joinRoom('gemini-room', '');
+    };
+
+    // ✅ STEP 7: Send chat message
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       if (!input.value.trim()) return;
-      socket.emit('chat message', { user: username, text: input.value.trim() });
+
+      socket.emit('chat message', {
+        user: username,
+        text: input.value.trim(),
+        lang: userLanguage
+      });
+
       input.value = '';
     });
 
-    // Add message to messages list with new styling
+    // ✅ STEP 8: Translate message function
+    async function translateMessage(messageText, targetLang, translateBtn) {
+      if (targetLang === 'en') return messageText;
+      
+      translateBtn.disabled = true;
+      translateBtn.textContent = 'Translating...';
+      
+      try {
+        const response = await fetch('/translate-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            text: messageText, 
+            targetLang: targetLang 
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.translated) {
+          return data.translated;
+        } else {
+          throw new Error('Translation failed');
+        }
+      } catch (error) {
+        console.error('Translation error:', error);
+        return null;
+      } finally {
+        translateBtn.disabled = false;
+        translateBtn.textContent = 'Translate 🔄';
+      }
+    }
+
+    // ✅ STEP 9: Add message with translation capability
     function addMessage(msg, isPrivate) {
       const li = document.createElement('li');
       li.className = isPrivate ? 'message private' : 'message';
@@ -247,62 +299,136 @@ joinGeminiBtn.onclick = () => {
       const text = document.createElement('div');
       text.className = 'message-text';
       text.textContent = msg.text;
+
+      // Add translate button (only if not in user's language and not English)
+      const translateBtn = document.createElement('button');
+      translateBtn.textContent = 'Translate 🔄';
+      translateBtn.className = 'translate-btn';
       
+      // Translation container for showing translated text
+      const translationContainer = document.createElement('div');
+      translationContainer.className = 'translated-text';
+      translationContainer.style.display = 'none';
+
+      translateBtn.onclick = async () => {
+        if (translationContainer.style.display === 'block') {
+          // Hide translation
+          translationContainer.style.display = 'none';
+          translateBtn.textContent = 'Translate 🔄';
+          return;
+        }
+
+        // Show translation
+        const translated = await translateMessage(msg.text, userLanguage, translateBtn);
+        
+        if (translated && translated !== msg.text) {
+          translationContainer.textContent = `🌐 ${translated}`;
+          translationContainer.style.display = 'block';
+          translateBtn.textContent = 'Hide Translation';
+        } else if (!translated) {
+          showError('Translation failed. Please try again.');
+        } else {
+          showError('Message is already in your language.');
+        }
+      };
+
       li.appendChild(header);
       li.appendChild(text);
+      li.appendChild(translateBtn);
+      li.appendChild(translationContainer);
       messages.appendChild(li);
       
       // Auto-scroll to bottom
       messages.parentElement.scrollTop = messages.parentElement.scrollHeight;
     }
 
+    // ✅ STEP 10: Gemini interaction
+    const askGeminiBtn = document.getElementById('askGeminiBtn');
+
+    askGeminiBtn.onclick = async () => {
+      const userMsg = input.value.trim();
+      if (!userMsg) return;
+
+      addMessage({
+        user: username,
+        text: userMsg,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }, false);
+
+      input.value = '';
+
+      try {
+        const res = await fetch('/chatbot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: userMsg })
+        });
+
+        const data = await res.json();
+        const botReply = data.reply || '🤖 Gemini could not respond.';
+
+        addMessage({
+          user: 'Gemini Bot',
+          text: botReply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }, false);
+      } catch (err) {
+        addMessage({
+          user: 'Gemini Bot',
+          text: '⚠️ Failed to contact Gemini API.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }, false);
+      }
+    };
+
+    // ✅ STEP 11: Translate input text before sending
+    const translateInputBtn = document.getElementById('translateInputBtn');
+
+    translateInputBtn.onclick = async () => {
+      const text = input.value.trim();
+      if (!text) {
+        showError('Please enter some text to translate.');
+        return;
+      }
+      
+      if (userLanguage === 'en') {
+        showError('Please select a target language other than English.');
+        return;
+      }
+
+      input.disabled = true;
+      translateInputBtn.disabled = true;
+      translateInputBtn.textContent = 'Translating...';
+      
+      try {
+        const res = await fetch('/gemini-translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, targetLang: userLanguage })
+        });
+
+        const data = await res.json();
+        
+        if (data.translated && data.translated !== text) {
+          input.value = data.translated;
+        } else {
+          showError('Translation failed or text is already in target language.');
+        }
+      } catch (err) {
+        console.error('Translation error:', err);
+        showError('Translation failed. Please try again.');
+      } finally {
+        input.disabled = false;
+        translateInputBtn.disabled = false;
+        translateInputBtn.textContent = 'Translate Input 🔄';
+      }
+    };
+
     // Focus username input on load
     window.addEventListener('load', () => {
       usernameInput.focus();
-      // Hide Gemini button by default on page load
-askGeminiBtn.style.display = 'none';
-
+      askGeminiBtn.style.display = 'none';
     });
-    const askGeminiBtn = document.getElementById('askGeminiBtn');
-
-askGeminiBtn.onclick = async () => {
-  const userMsg = input.value.trim();
-  if (!userMsg) return;
-
-  // Add user message locally
-  addMessage({
-    user: username,
-    text: userMsg,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }, false);
-
-  input.value = '';
-
-  // Fetch Gemini's response
-  try {
-    const res = await fetch('/chatbot', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMsg })
-    });
-
-    const data = await res.json();
-    const botReply = data.reply || '🤖 Gemini could not respond.';
-
-    addMessage({
-      user: 'Gemini Bot',
-      text: botReply,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }, false);
-  } catch (err) {
-    addMessage({
-      user: 'Gemini Bot',
-      text: '⚠️ Failed to contact Gemini API.',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }, false);
-  }
-};
-
   </script>
 </body>
 </html>

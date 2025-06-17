@@ -1,31 +1,133 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
 require('dotenv').config();
-console.log("Gemini API Key:", process.env.GEMINI_API_KEY);
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+
 app.use(express.static('public'));
-app.use(bodyParser.json()); // for parsing JSON POST requests
+app.use(express.json());
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-const users = {}; // socket.id => { username, room }
+const users = {};
 const rooms = {
   lobby: { isPrivate: false, password: '' }
 };
 
-// ➕ Gemini chatbot endpoint
-app.post('/chatbot', async (req, res) => {
-  const userPrompt = req.body.message || 'Say hello!';
-  console.log("Prompt received:", userPrompt);
+// Language mapping for better translation prompts
+const LANGUAGE_NAMES = {
+  'en': 'English',
+  'hi': 'Hindi',
+  'es': 'Spanish',
+  'fr': 'French',
+  'de': 'German',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'zh': 'Chinese',
+  'ar': 'Arabic',
+  'ru': 'Russian'
+};
+
+// ✅ STEP 1: Translation endpoint for input text
+app.post('/gemini-translate', async (req, res) => {
+  const { text, targetLang } = req.body;
+
+  if (!text || !targetLang) {
+    return res.status(400).json({ error: 'Missing text or language' });
+  }
+
+  // Don't translate if already in English or same language
+  if (targetLang === 'en') {
+    return res.json({ translated: text });
+  }
 
   try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+    const targetLanguageName = LANGUAGE_NAMES[targetLang] || targetLang;
+    
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Translate the following text to ${targetLanguageName}. Respond only with the translation, no explanations:
+
+Text to translate: "${text}"`
+          }]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const translated = data.candidates[0].content.parts[0].text.trim();
+      res.json({ translated });
+    } else {
+      console.error('Gemini translation error:', data);
+      res.status(500).json({ error: 'Translation failed' });
+    }
+
+  } catch (err) {
+    console.error('Gemini translation fetch error:', err);
+    res.status(500).json({ error: 'Translation server error' });
+  }
+});
+
+// ✅ STEP 2: Message translation endpoint
+app.post('/translate-message', async (req, res) => {
+  const { text, targetLang } = req.body;
+
+  if (!text || !targetLang) {
+    return res.status(400).json({ error: 'Missing text or language' });
+  }
+
+  if (targetLang === 'en') {
+    return res.json({ translated: text });
+  }
+
+  try {
+    const targetLanguageName = LANGUAGE_NAMES[targetLang] || targetLang;
+    
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: `Translate this message to ${targetLanguageName}. Keep the tone and meaning intact. Respond only with the translation:
+
+"${text}"`
+          }]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      const translated = data.candidates[0].content.parts[0].text.trim().replace(/"/g, '');
+      res.json({ translated });
+    } else {
+      res.status(500).json({ error: 'Translation failed' });
+    }
+
+  } catch (err) {
+    console.error('Message translation error:', err);
+    res.status(500).json({ error: 'Translation server error' });
+  }
+});
+
+// Gemini chatbot endpoint (keeping existing functionality)
+app.post('/chatbot', async (req, res) => {
+  const userPrompt = req.body.message || 'Say hello!';
+
+  try {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -34,23 +136,22 @@ app.post('/chatbot', async (req, res) => {
     });
 
     const data = await response.json();
-    console.log("Gemini response:", data); // ✅ Log full response for testing
 
     if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
       const reply = data.candidates[0].content.parts[0].text;
       res.json({ reply });
     } else if (data.error) {
-      res.status(500).json({ reply: `⚠️ Gemini API error: ${data.error.message}` });
+      return res.status(500).json({ reply: `⚠️ Gemini API error: ${data.error.message}` });
     } else {
-      res.status(500).json({ reply: '⚠️ Gemini returned an unexpected response.' });
+      return res.status(500).json({ reply: '⚠️ Gemini returned an unexpected response.' });
     }
   } catch (error) {
     console.error('Gemini fetch error:', error);
-    res.status(500).json({ reply: '⚠️ Internal server error while calling Gemini.' });
+    return res.status(500).json({ reply: '⚠️ Internal server error while calling Gemini.' });
   }
 });
 
-
+// Socket.io connection handling
 io.on('connection', (socket) => {
   let username = 'Anonymous';
 
@@ -71,15 +172,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('join room', ({ roomName, password, isPrivate }) => {
+  socket.on('join room', ({ roomName, password }) => {
     const currentUser = users[socket.id];
     if (!currentUser) return;
 
     const oldRoom = currentUser.room;
     socket.leave(oldRoom);
 
+    // Auto-determine if room should be private based on password
+    const isPrivate = password && password.trim() !== '';
+
     if (!rooms[roomName]) {
-      rooms[roomName] = { isPrivate, password };
+      rooms[roomName] = { isPrivate, password: password || '' };
       console.log(`Room created: ${roomName}, private: ${isPrivate}`);
     } else if (rooms[roomName].isPrivate && rooms[roomName].password !== password) {
       socket.emit('join error', 'Incorrect password for private room');
@@ -95,49 +199,52 @@ io.on('connection', (socket) => {
     console.log(`${username} joined room: ${roomName}`);
   });
 
+  // ✅ STEP 3: Updated chat message handler
   socket.on('chat message', async (msg) => {
-  const userData = users[socket.id];
-  if (!userData) return;
+    const userData = users[socket.id];
+    if (!userData) return;
 
-  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Broadcast user's message to room
+    io.to(userData.room).emit('chat message', {
+      user: msg.user || userData.username,
+      text: msg.text,
+      time,
+      originalLang: msg.lang || 'en' // Track original language
+    });
 
-  // Broadcast user's message to room
-  io.to(userData.room).emit('chat message', {
-    user: msg.user || userData.username,
-    text: msg.text,
-    time
-  });
+    // Handle Gemini room responses
+    if (userData.room === 'gemini-room') {
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: msg.text }] }]
+          })
+        });
 
-  // ✅ If user is in gemini-room, call Gemini API and respond
-  if (userData.room === 'gemini-room') {
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: msg.text }] }]
-        })
-      });
+        const data = await response.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "🤖 Gemini could not respond.";
 
-      const data = await response.json();
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "🤖 Gemini could not respond.";
-
-      io.to('gemini-room').emit('chat message', {
-        user: 'Gemini Bot 🤖',
-        text: reply,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
-    } catch (err) {
-      console.error('Gemini error:', err);
-      io.to('gemini-room').emit('chat message', {
-        user: 'Gemini Bot 🤖',
-        text: '⚠️ Failed to contact Gemini API.',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
+        io.to('gemini-room').emit('chat message', {
+          user: 'Gemini Bot 🤖',
+          text: reply,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          originalLang: 'en'
+        });
+      } catch (err) {
+        console.error('Gemini error:', err);
+        io.to('gemini-room').emit('chat message', {
+          user: 'Gemini Bot 🤖',
+          text: '⚠️ Failed to contact Gemini API.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          originalLang: 'en'
+        });
+      }
     }
-  }
-});
-
+  });
 
   socket.on('private message', ({ toUser, text }) => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
