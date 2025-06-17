@@ -32,7 +32,7 @@
       <input id="roomPassword" class="room-input" type="password" placeholder="Password (optional - makes room private)" />
      <button id="joinRoomBtn" class="btn">Join Room</button>
       <button id="joinGeminiBtn" class="btn" style="background: #6a1b9a;">Join Gemini Room 🤖</button>
-      <!-- ✅ STEP 5: Language selector in sidebar -->
+      <!-- Language selector in sidebar -->
       <div class="language-selector">
         <label for="languageSelect">🌐 My Language:</label>
         <select id="languageSelect">
@@ -93,7 +93,7 @@
 
     let username = '';
     let currentRoom = 'lobby';
-    let userLanguage = 'en'; // Track user's preferred language
+    let userLanguage = 'en';
 
     const usernameModal = document.getElementById('usernameModal');
     const usernameInput = document.getElementById('usernameInput');
@@ -111,13 +111,13 @@
     const errorMessage = document.getElementById('errorMessage');
     const languageSelect = document.getElementById('languageSelect');
 
-    // ✅ STEP 6: Language change handler
+    // Language change handler
     languageSelect.addEventListener('change', (e) => {
       userLanguage = e.target.value;
       console.log(`Language changed to: ${userLanguage}`);
     });
 
-    // Show error message with animation
+    // Show error message
     function showError(msg) {
       errorMessage.textContent = msg;
       errorMessage.classList.add('show');
@@ -210,7 +210,7 @@
       roomPassword.value = '';
       messages.innerHTML = '';
 
-      // Toggle buttons based on room
+      //  buttons based on room
       const sendBtn = document.getElementById('sendBtn');
       const askGeminiBtn = document.getElementById('askGeminiBtn');
 
@@ -240,7 +240,7 @@
       joinRoom('gemini-room', '');
     };
 
-    // ✅ STEP 7: Send chat message
+    // Send chat message
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       if (!input.value.trim()) return;
@@ -254,7 +254,7 @@
       input.value = '';
     });
 
-    // ✅ STEP 8: Translate message function
+    // Translate message function
     async function translateMessage(messageText, targetLang, translateBtn) {
       if (targetLang === 'en') return messageText;
       
@@ -287,7 +287,7 @@
       }
     }
 
-    // ✅ STEP 9: Add message with translation capability
+    // Add message with translation capability
     function addMessage(msg, isPrivate) {
       const li = document.createElement('li');
       li.className = isPrivate ? 'message private' : 'message';
@@ -300,7 +300,7 @@
       text.className = 'message-text';
       text.textContent = msg.text;
 
-      // Add translate button (only if not in user's language and not English)
+      // Add translate button 
       const translateBtn = document.createElement('button');
       translateBtn.textContent = 'Translate 🔄';
       translateBtn.className = 'translate-btn';
@@ -342,7 +342,7 @@
       messages.parentElement.scrollTop = messages.parentElement.scrollHeight;
     }
 
-    // ✅ STEP 10: Gemini interaction
+    // Gemini interaction
     const askGeminiBtn = document.getElementById('askGeminiBtn');
 
     askGeminiBtn.onclick = async () => {
@@ -381,7 +381,7 @@
       }
     };
 
-    // ✅ STEP 11: Translate input text before sending
+    // Translate input text before sending
     const translateInputBtn = document.getElementById('translateInputBtn');
 
     translateInputBtn.onclick = async () => {

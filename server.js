@@ -18,7 +18,7 @@ const rooms = {
   lobby: { isPrivate: false, password: '' }
 };
 
-// Language mapping for better translation prompts
+// Language opts
 const LANGUAGE_NAMES = {
   'en': 'English',
   'hi': 'Hindi',
@@ -32,7 +32,7 @@ const LANGUAGE_NAMES = {
   'ru': 'Russian'
 };
 
-// ✅ STEP 1: Translation endpoint for input text
+// Translation for input text
 app.post('/gemini-translate', async (req, res) => {
   const { text, targetLang } = req.body;
 
@@ -40,7 +40,7 @@ app.post('/gemini-translate', async (req, res) => {
     return res.status(400).json({ error: 'Missing text or language' });
   }
 
-  // Don't translate if already in English or same language
+  // Don't translate if already in same language
   if (targetLang === 'en') {
     return res.json({ translated: text });
   }
@@ -78,7 +78,7 @@ Text to translate: "${text}"`
   }
 });
 
-// ✅ STEP 2: Message translation endpoint
+// ✅ Message translation
 app.post('/translate-message', async (req, res) => {
   const { text, targetLang } = req.body;
 
@@ -122,7 +122,7 @@ app.post('/translate-message', async (req, res) => {
   }
 });
 
-// Gemini chatbot endpoint (keeping existing functionality)
+// Gemini chatbot
 app.post('/chatbot', async (req, res) => {
   const userPrompt = req.body.message || 'Say hello!';
 
@@ -179,7 +179,7 @@ io.on('connection', (socket) => {
     const oldRoom = currentUser.room;
     socket.leave(oldRoom);
 
-    // Auto-determine if room should be private based on password
+    // Private Room Creation
     const isPrivate = password && password.trim() !== '';
 
     if (!rooms[roomName]) {
@@ -199,14 +199,14 @@ io.on('connection', (socket) => {
     console.log(`${username} joined room: ${roomName}`);
   });
 
-  // ✅ STEP 3: Updated chat message handler
+  // ✅ Updated chat message
   socket.on('chat message', async (msg) => {
     const userData = users[socket.id];
     if (!userData) return;
 
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    // Broadcast user's message to room
+  
+    // Show user's message to room
     io.to(userData.room).emit('chat message', {
       user: msg.user || userData.username,
       text: msg.text,
@@ -214,7 +214,7 @@ io.on('connection', (socket) => {
       originalLang: msg.lang || 'en' // Track original language
     });
 
-    // Handle Gemini room responses
+    // Handle Gemini responses
     if (userData.room === 'gemini-room') {
       try {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`, {
